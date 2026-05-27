@@ -158,60 +158,56 @@
 -->
 <script type="text/plain" id="autofill-template">
 (async () => {
-  /* ── Baked-in data from MakerWorld ───────────────────── */
+  // --- Data from MakerWorld ---
   var TITLE      = __MW_TITLE__;
   var DESC       = __MW_DESC__;
   var SOURCE_URL = __MW_URL__;
   var TAGS       = __MW_TAGS__;
 
-  /* ── Helpers ─────────────────────────────────────────── */
   var delay = function(ms) { return new Promise(function(r) { setTimeout(r, ms); }); };
   var filled = [];
   var manual = [];
 
-  /**
-   * Find an input or textarea whose nearest label contains `text`.
-   * Tries: <label> elements, div/span labels (React UIs), placeholder, aria-label.
-   */
+  // Find an input/textarea by scanning nearby label text
   function findByLabel(text) {
     var lower = text.toLowerCase();
 
-    // 1. Real <label> elements
+    // Real label elements
     var labels = document.querySelectorAll('label');
     for (var i = 0; i < labels.length; i++) {
       var lbl = labels[i];
       if (lbl.textContent.trim().toLowerCase().indexOf(lower) === -1) continue;
       if (lbl.htmlFor) {
-        var el = document.getElementById(lbl.htmlFor);
-        if (el) return el;
+        var byId = document.getElementById(lbl.htmlFor);
+        if (byId) return byId;
       }
       var direct = lbl.querySelector('input:not([type=hidden]):not([type=submit]):not([type=checkbox]):not([type=radio]),textarea');
       if (direct) return direct;
       var next = lbl.nextElementSibling;
       if (next) {
-        var inp = (next.matches('input,textarea')) ? next : next.querySelector('input:not([type=hidden]):not([type=submit]),textarea');
-        if (inp) return inp;
+        var fromNext = next.matches('input,textarea') ? next : next.querySelector('input:not([type=hidden]):not([type=submit]),textarea');
+        if (fromNext) return fromNext;
       }
-      var wrap = lbl.closest('div,fieldset,section,[class*="field"],[class*="Field"]');
+      var wrap = lbl.closest('div,fieldset,section');
       if (wrap) {
-        var inp2 = wrap.querySelector('input:not([type=hidden]):not([type=submit]):not([type=checkbox]):not([type=radio]),textarea');
-        if (inp2) return inp2;
+        var fromWrap = wrap.querySelector('input:not([type=hidden]):not([type=submit]):not([type=checkbox]):not([type=radio]),textarea');
+        if (fromWrap) return fromWrap;
       }
     }
 
-    // 2. Div/span acting as label (React/Vue)
-    var pseudoLabels = document.querySelectorAll('[class*="label" i],[class*="Label"],[data-label]');
-    for (var j = 0; j < pseudoLabels.length; j++) {
-      var node = pseudoLabels[j];
+    // Div/span acting as label (React/Vue apps)
+    var nodes = document.querySelectorAll('[class*="label" i],[class*="Label"],[data-label]');
+    for (var j = 0; j < nodes.length; j++) {
+      var node = nodes[j];
       if (node.textContent.trim().toLowerCase().indexOf(lower) === -1) continue;
-      var wrap2 = node.closest('div,section,[class]');
+      var wrap2 = node.closest('div,section');
       if (wrap2) {
-        var inp3 = wrap2.querySelector('input:not([type=hidden]):not([type=submit]):not([type=checkbox]):not([type=radio]),textarea');
-        if (inp3 && inp3 !== node) return inp3;
+        var fromWrap2 = wrap2.querySelector('input:not([type=hidden]):not([type=submit]):not([type=checkbox]):not([type=radio]),textarea');
+        if (fromWrap2 && fromWrap2 !== node) return fromWrap2;
       }
     }
 
-    // 3. Placeholder / aria-label fallback
+    // Placeholder / aria-label fallback
     return (
       document.querySelector('input[placeholder*="' + text + '" i],textarea[placeholder*="' + text + '" i]') ||
       document.querySelector('input[aria-label*="' + text + '" i],textarea[aria-label*="' + text + '" i]') ||
@@ -219,7 +215,7 @@
     );
   }
 
-  /** Set value in a way React's synthetic event system recognises. */
+  // React-compatible value setter
   function setNativeValue(el, value) {
     var proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     var desc  = Object.getOwnPropertyDescriptor(proto, 'value');
@@ -232,10 +228,7 @@
   function fillField(labelText, value, fieldName) {
     if (!value) return null;
     var el = findByLabel(labelText);
-    if (!el) {
-      manual.push(fieldName + ' — field not found (label: "' + labelText + '")');
-      return null;
-    }
+    if (!el) { manual.push(fieldName + ' - field not found'); return null; }
     el.focus();
     setNativeValue(el, value);
     el.blur();
@@ -243,15 +236,15 @@
     return el;
   }
 
-  /* ── 1. Title ────────────────────────────────────────── */
+  // 1. Title
   fillField('title', TITLE, 'Title');
   await delay(300);
 
-  /* ── 2. Description ──────────────────────────────────── */
+  // 2. Description
   fillField('description', DESC, 'Description');
   await delay(300);
 
-  /* ── 3. Special Instructions (filled with description) ── */
+  // 3. Special Instructions
   var instrEl = findByLabel('special instruction') || findByLabel('instructions') || findByLabel('notes');
   if (instrEl) {
     instrEl.focus();
@@ -261,26 +254,22 @@
     await delay(300);
   }
 
-  /* ── 4. Original Source / Creator — dialog flow ─────── */
+  // 4. Original Source / Creator - multi-step dialog flow
   var sourceHandled = false;
-
-  // Find the page section that talks about "Original Source" or "Creator"
   var allEls = Array.from(document.querySelectorAll('*'));
   var sourceSection = null;
   for (var s = 0; s < allEls.length; s++) {
-    var el = allEls[s];
-    var txt = (el.textContent || '').trim().toLowerCase();
+    var elS = allEls[s];
+    var txt = (elS.textContent || '').trim().toLowerCase();
     if (
       (txt.indexOf('original source') !== -1 || txt.indexOf('original creator') !== -1 || txt.indexOf('credit the') !== -1) &&
-      el.children.length >= 1 && el.children.length <= 20 &&
-      el.tagName !== 'HTML' && el.tagName !== 'BODY'
-    ) { sourceSection = el; break; }
+      elS.children.length >= 1 && elS.children.length <= 20 &&
+      elS.tagName !== 'HTML' && elS.tagName !== 'BODY'
+    ) { sourceSection = elS; break; }
   }
 
   if (sourceSection) {
-    // Step 1: click the edit/change button
-    var sectionBtns = Array.from(sourceSection.querySelectorAll('button,[role="button"]'));
-    var editBtn = sectionBtns.find(function(b) {
+    var editBtn = Array.from(sourceSection.querySelectorAll('button,[role="button"]')).find(function(b) {
       return /edit|change|update|set|add/i.test((b.textContent || '').trim());
     }) || sourceSection.querySelector('[class*="edit" i],[class*="change" i],[aria-label*="edit" i]');
 
@@ -288,18 +277,14 @@
       editBtn.click();
       await delay(600);
 
-      // Step 2: click "I didn't make this" style option
-      var allClickable = Array.from(document.querySelectorAll('button,[role="button"],label,li,[role="option"],[role="radio"],[role="menuitem"]'));
-      var didntMakeBtn = allClickable.find(function(el) {
-        return /didn.?t make|not (the )?original|someone else|original creator|i remixed|give credit|third.?party/i
-          .test((el.textContent || '').trim());
+      var didntMakeBtn = Array.from(document.querySelectorAll('button,[role="button"],label,li,[role="option"],[role="radio"],[role="menuitem"]')).find(function(elD) {
+        return /didn.?t make|not (the )?original|someone else|original creator|i remixed|give credit|third.?party/i.test((elD.textContent || '').trim());
       });
 
       if (didntMakeBtn) {
         didntMakeBtn.click();
         await delay(500);
 
-        // Step 3: find URL input that appeared
         var urlInput =
           document.querySelector('input[type="url"]') ||
           document.querySelector('input[placeholder*="url" i],input[placeholder*="link" i],input[placeholder*="source" i],input[placeholder*="http"]') ||
@@ -311,20 +296,17 @@
           setNativeValue(urlInput, SOURCE_URL);
           await delay(300);
 
-          // Step 4: confirm / save
           var dialog =
             urlInput.closest('[role="dialog"],[role="alertdialog"]') ||
             urlInput.closest('[class*="modal" i],[class*="popup" i],[class*="popover" i],[class*="bubble" i],[class*="overlay" i]') ||
             urlInput.closest('form') ||
             (urlInput.parentElement && urlInput.parentElement.parentElement);
 
-          var saveBtn = null;
-          if (dialog) {
-            var dialogBtns = Array.from(dialog.querySelectorAll('button'));
-            saveBtn = dialogBtns.find(function(b) {
-              return /save|confirm|done|ok|apply|submit|update/i.test((b.textContent || '').trim());
-            });
-          }
+          var saveBtn = dialog
+            ? Array.from(dialog.querySelectorAll('button')).find(function(b) {
+                return /save|confirm|done|ok|apply|submit|update/i.test((b.textContent || '').trim());
+              })
+            : null;
 
           if (saveBtn) {
             saveBtn.click();
@@ -339,13 +321,10 @@
           filled.push('Original Source URL');
           sourceHandled = true;
         } else {
-          manual.push('Original Source URL — URL input not found after clicking option');
+          manual.push('Original Source URL - URL input not found after clicking option');
         }
       } else {
-        // Fallback: maybe there's a direct URL input in the section
-        var directInput =
-          findByLabel('source') || findByLabel('original') || findByLabel('credit') ||
-          document.querySelector('input[type="url"]');
+        var directInput = findByLabel('source') || findByLabel('original') || findByLabel('credit') || document.querySelector('input[type="url"]');
         if (directInput) {
           directInput.focus();
           setNativeValue(directInput, SOURCE_URL);
@@ -353,28 +332,27 @@
           filled.push('Original Source URL (direct)');
           sourceHandled = true;
         } else {
-          manual.push('Original Source URL — could not find "I didn\'t make this" option or a URL input');
+          manual.push('Original Source URL - could not find dialog option or direct input');
         }
       }
     } else {
-      manual.push('Original Source URL — edit button not found in source section');
+      manual.push('Original Source URL - edit button not found');
     }
   }
 
   if (!sourceHandled && filled.indexOf('Original Source URL') === -1 && filled.indexOf('Original Source URL (direct)') === -1) {
-    manual.push('Original Source URL — paste manually: ' + SOURCE_URL);
+    manual.push('Original Source URL - paste manually: ' + SOURCE_URL);
   }
   await delay(300);
 
-  /* ── 5. Tags ─────────────────────────────────────────── */
+  // 5. Tags
   if (TAGS.length > 0) {
     var tagsInput =
       document.querySelector('input[placeholder*="tag" i]') ||
       document.querySelector('input[aria-label*="tag" i]') ||
       document.querySelector('[class*="tag" i] input') ||
       document.querySelector('[data-testid*="tag" i] input') ||
-      findByLabel('tag') ||
-      findByLabel('tags');
+      findByLabel('tag') || findByLabel('tags');
 
     if (tagsInput) {
       for (var t = 0; t < TAGS.length; t++) {
@@ -384,7 +362,6 @@
         tagsInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
         tagsInput.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', keyCode: 13, bubbles: true }));
         await delay(280);
-        // If Enter didn't clear the field, try a comma
         if (tagsInput.value.trim() !== '') {
           tagsInput.dispatchEvent(new KeyboardEvent('keydown', { key: ',', keyCode: 188, bubbles: true }));
           await delay(150);
@@ -393,26 +370,26 @@
       }
       filled.push('Tags (' + TAGS.length + '): ' + TAGS.join(', '));
     } else {
-      manual.push('Tags — paste manually: ' + TAGS.join(', '));
+      manual.push('Tags - paste manually: ' + TAGS.join(', '));
     }
   }
 
-  /* ── Summary ─────────────────────────────────────────── */
-  var bar = '─'.repeat(52);
-  console.log('%c' + bar, 'color:#333');
-  console.log('%c✅  Toybox Autofill Complete', 'color:#22c55e;font-size:14px;font-weight:bold;');
+  // --- Summary ---
+  var bar = '====================================================';
+  console.log('%c' + bar, 'color:#555');
+  console.log('%c[OK] Toybox Autofill Complete', 'color:#22c55e;font-size:14px;font-weight:bold;');
   if (filled.length) {
-    console.log('%c  Filled successfully:', 'color:#86efac;font-weight:600;');
-    filled.forEach(function(f) { console.log('  %c✓ ' + f, 'color:#4ade80'); });
+    console.log('%c  Filled:', 'color:#86efac;font-weight:600;');
+    filled.forEach(function(f) { console.log('  %c  + ' + f, 'color:#4ade80'); });
   }
   if (manual.length) {
     console.log('%c  Needs manual attention:', 'color:#fbbf24;font-weight:600;');
-    manual.forEach(function(m) { console.log('  %c⚠ ' + m, 'color:#fde68a'); });
+    manual.forEach(function(m) { console.log('  %c  ! ' + m, 'color:#fde68a'); });
   }
   if (!filled.length && !manual.length) {
-    console.log('No fields were found — the page structure may differ from expected.');
+    console.log('No fields found - the page structure may differ from expected.');
   }
-  console.log('%c' + bar, 'color:#333');
+  console.log('%c' + bar, 'color:#555');
 })();
 </script>
 
