@@ -162,6 +162,7 @@
   var DESC       = __MW_DESC__;
   var SOURCE_URL = __MW_URL__;
   var TAGS       = __MW_TAGS__;
+  var LICENSE    = __MW_LICENSE__;
 
   var delay = function(ms) { return new Promise(function(r) { setTimeout(r, ms); }); };
   var filled = [];
@@ -211,7 +212,20 @@
     await delay(300);
   }
 
-  // --- 4. Original Source URL ---
+  // --- 4. License ---
+  var licenseEl = document.getElementById('license') ||
+    document.querySelector('select[name*="license" i], input[name*="license" i]');
+  if (licenseEl && LICENSE) {
+    licenseEl.focus();
+    setNativeValue(licenseEl, LICENSE);
+    licenseEl.blur();
+    filled.push('License: ' + LICENSE);
+    await delay(300);
+  } else if (LICENSE) {
+    manual.push('License - add manually: ' + LICENSE);
+  }
+
+  // --- 5. Original Source URL ---
   // Click the edit button, pick "Someone else made this", fill the URL, click Done
   var sourceHandled = false;
   var editSourceBtn = document.getElementById('edit-original_source');
@@ -259,7 +273,7 @@
   }
   await delay(300);
 
-  // --- 5. Tags ---
+  // --- 6. Tags ---
   if (TAGS.length > 0) {
     // Find the edit button next to the TAGS label
     var tagsEditBtn = null;
@@ -278,19 +292,10 @@
 
       var tagsInput = document.getElementById('tags');
       if (tagsInput) {
-        for (var t = 0; t < TAGS.length; t++) {
-          tagsInput.focus();
-          setNativeValue(tagsInput, TAGS[t]);
-          await delay(180);
-          tagsInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-          tagsInput.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', keyCode: 13, bubbles: true }));
-          await delay(280);
-          if (tagsInput.value.trim() !== '') {
-            tagsInput.dispatchEvent(new KeyboardEvent('keydown', { key: ',', keyCode: 188, bubbles: true }));
-            await delay(150);
-            if (tagsInput.value.trim() !== '') setNativeValue(tagsInput, '');
-          }
-        }
+        // Type all tags as one comma-separated string
+        tagsInput.focus();
+        setNativeValue(tagsInput, TAGS.join(', '));
+        await delay(300);
 
         var doneBtn2 = Array.from(document.querySelectorAll('button')).find(function(b) {
           return /done|save|ok/i.test(b.textContent.trim());
@@ -298,7 +303,7 @@
         if (doneBtn2) {
           doneBtn2.click();
           await delay(400);
-          filled.push('Tags (' + TAGS.length + '): ' + TAGS.join(', '));
+          filled.push('Tags: ' + TAGS.join(', '));
         } else {
           filled.push('Tags entered but Done button not found - may need manual confirm');
         }
@@ -350,10 +355,11 @@
   function generateScript(data) {
     var tmpl = document.getElementById('autofill-template').textContent.trim();
     return tmpl
-      .replace('__MW_TITLE__', JSON.stringify(data.title))
-      .replace('__MW_DESC__',  JSON.stringify(data.description))
-      .replace('__MW_URL__',   JSON.stringify(data.sourceUrl))
-      .replace('__MW_TAGS__',  JSON.stringify(data.tags));
+      .replace('__MW_TITLE__',   JSON.stringify(data.title))
+      .replace('__MW_DESC__',    JSON.stringify(data.description))
+      .replace('__MW_URL__',     JSON.stringify(data.sourceUrl))
+      .replace('__MW_TAGS__',    JSON.stringify((data.tags || []).slice(0, 3)))
+      .replace('__MW_LICENSE__', JSON.stringify(data.license || ''));
   }
 
   fetchBtn.addEventListener('click', async function() {
