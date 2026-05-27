@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MakerWorld → Toybox Autofill</title>
+  <title>MakerWorld to Toybox Autofill</title>
   <style>
     :root {
       --bg: #0d0d14;
@@ -133,7 +133,7 @@
 
   <div id="outputSection" style="display:none">
     <div class="output-header">
-      <h2>Console Script &mdash; paste into F12 &rarr; Console on your Toybox upload page</h2>
+      <h2>Console Script -- paste into F12 Console on your Toybox upload page</h2>
       <button class="btn" id="copyBtn">Copy to Clipboard</button>
     </div>
     <textarea id="scriptOutput" readonly spellcheck="false"></textarea>
@@ -152,13 +152,12 @@
 </div>
 
 <!--
-  Autofill script template stored as inert text so backticks and ${} are safe.
-  Four placeholders are replaced at runtime with JSON.stringify'd values:
-    __MW_TITLE__   __MW_DESC__   __MW_URL__   __MW_TAGS__
+  Autofill script template. Placeholders replaced at runtime:
+    __MW_TITLE__  __MW_DESC__  __MW_URL__  __MW_TAGS__
 -->
 <script type="text/plain" id="autofill-template">
 (async () => {
-  // --- Data from MakerWorld ---
+  // --- Baked-in data from MakerWorld ---
   var TITLE      = __MW_TITLE__;
   var DESC       = __MW_DESC__;
   var SOURCE_URL = __MW_URL__;
@@ -167,53 +166,6 @@
   var delay = function(ms) { return new Promise(function(r) { setTimeout(r, ms); }); };
   var filled = [];
   var manual = [];
-
-  // Find an input/textarea by scanning nearby label text
-  function findByLabel(text) {
-    var lower = text.toLowerCase();
-
-    // Real label elements
-    var labels = document.querySelectorAll('label');
-    for (var i = 0; i < labels.length; i++) {
-      var lbl = labels[i];
-      if (lbl.textContent.trim().toLowerCase().indexOf(lower) === -1) continue;
-      if (lbl.htmlFor) {
-        var byId = document.getElementById(lbl.htmlFor);
-        if (byId) return byId;
-      }
-      var direct = lbl.querySelector('input:not([type=hidden]):not([type=submit]):not([type=checkbox]):not([type=radio]),textarea');
-      if (direct) return direct;
-      var next = lbl.nextElementSibling;
-      if (next) {
-        var fromNext = next.matches('input,textarea') ? next : next.querySelector('input:not([type=hidden]):not([type=submit]),textarea');
-        if (fromNext) return fromNext;
-      }
-      var wrap = lbl.closest('div,fieldset,section');
-      if (wrap) {
-        var fromWrap = wrap.querySelector('input:not([type=hidden]):not([type=submit]):not([type=checkbox]):not([type=radio]),textarea');
-        if (fromWrap) return fromWrap;
-      }
-    }
-
-    // Div/span acting as label (React/Vue apps)
-    var nodes = document.querySelectorAll('[class*="label" i],[class*="Label"],[data-label]');
-    for (var j = 0; j < nodes.length; j++) {
-      var node = nodes[j];
-      if (node.textContent.trim().toLowerCase().indexOf(lower) === -1) continue;
-      var wrap2 = node.closest('div,section');
-      if (wrap2) {
-        var fromWrap2 = wrap2.querySelector('input:not([type=hidden]):not([type=submit]):not([type=checkbox]):not([type=radio]),textarea');
-        if (fromWrap2 && fromWrap2 !== node) return fromWrap2;
-      }
-    }
-
-    // Placeholder / aria-label fallback
-    return (
-      document.querySelector('input[placeholder*="' + text + '" i],textarea[placeholder*="' + text + '" i]') ||
-      document.querySelector('input[aria-label*="' + text + '" i],textarea[aria-label*="' + text + '" i]') ||
-      null
-    );
-  }
 
   // React-compatible value setter
   function setNativeValue(el, value) {
@@ -225,28 +177,33 @@
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  function fillField(labelText, value, fieldName) {
-    if (!value) return null;
-    var el = findByLabel(labelText);
-    if (!el) { manual.push(fieldName + ' - field not found'); return null; }
-    el.focus();
-    setNativeValue(el, value);
-    el.blur();
-    filled.push(fieldName);
-    return el;
+  // --- 1. Title (id="name") ---
+  var titleEl = document.getElementById('name');
+  if (titleEl && TITLE) {
+    titleEl.focus();
+    setNativeValue(titleEl, TITLE);
+    titleEl.blur();
+    filled.push('Title');
+  } else if (!titleEl) {
+    manual.push('Title - field not found (id="name")');
   }
-
-  // 1. Title
-  fillField('title', TITLE, 'Title');
   await delay(300);
 
-  // 2. Description
-  fillField('description', DESC, 'Description');
+  // --- 2. Description (id="description") ---
+  var descEl = document.getElementById('description');
+  if (descEl && DESC) {
+    descEl.focus();
+    setNativeValue(descEl, DESC);
+    descEl.blur();
+    filled.push('Description');
+  } else if (!descEl) {
+    manual.push('Description - field not found (id="description")');
+  }
   await delay(300);
 
-  // 3. Special Instructions
-  var instrEl = findByLabel('special instruction') || findByLabel('instructions') || findByLabel('notes');
-  if (instrEl) {
+  // --- 3. Special Instructions (id="instructions") ---
+  var instrEl = document.getElementById('instructions');
+  if (instrEl && DESC) {
     instrEl.focus();
     setNativeValue(instrEl, DESC);
     instrEl.blur();
@@ -254,128 +211,107 @@
     await delay(300);
   }
 
-  // 4. Original Source / Creator - multi-step dialog flow
+  // --- 4. Original Source URL ---
+  // Click the edit button, pick "Someone else made this", fill the URL, click Done
   var sourceHandled = false;
-  var allEls = Array.from(document.querySelectorAll('*'));
-  var sourceSection = null;
-  for (var s = 0; s < allEls.length; s++) {
-    var elS = allEls[s];
-    var txt = (elS.textContent || '').trim().toLowerCase();
-    if (
-      (txt.indexOf('original source') !== -1 || txt.indexOf('original creator') !== -1 || txt.indexOf('credit the') !== -1) &&
-      elS.children.length >= 1 && elS.children.length <= 20 &&
-      elS.tagName !== 'HTML' && elS.tagName !== 'BODY'
-    ) { sourceSection = elS; break; }
-  }
+  var editSourceBtn = document.getElementById('edit-original_source');
+  if (editSourceBtn) {
+    editSourceBtn.click();
+    await delay(600);
 
-  if (sourceSection) {
-    var editBtn = Array.from(sourceSection.querySelectorAll('button,[role="button"]')).find(function(b) {
-      return /edit|change|update|set|add/i.test((b.textContent || '').trim());
-    }) || sourceSection.querySelector('[class*="edit" i],[class*="change" i],[aria-label*="edit" i]');
+    var someoneElseRadio = document.getElementById('yes_1');
+    if (someoneElseRadio) {
+      someoneElseRadio.click();
+      await delay(300);
 
-    if (editBtn) {
-      editBtn.click();
-      await delay(600);
+      // Wait up to 3 seconds for the URL input to appear
+      var urlInput = null;
+      for (var attempt = 0; attempt < 15; attempt++) {
+        await delay(200);
+        urlInput = document.getElementById('text-input');
+        if (urlInput) break;
+      }
 
-      var didntMakeBtn = Array.from(document.querySelectorAll('button,[role="button"],label,li,[role="option"],[role="radio"],[role="menuitem"]')).find(function(elD) {
-        return /didn.?t make|not (the )?original|someone else|original creator|i remixed|give credit|third.?party/i.test((elD.textContent || '').trim());
-      });
+      if (urlInput && SOURCE_URL) {
+        urlInput.focus();
+        setNativeValue(urlInput, SOURCE_URL);
+        await delay(300);
 
-      if (didntMakeBtn) {
-        didntMakeBtn.click();
-        await delay(500);
-
-        var urlInput =
-          document.querySelector('input[type="url"]') ||
-          document.querySelector('input[placeholder*="url" i],input[placeholder*="link" i],input[placeholder*="source" i],input[placeholder*="http"]') ||
-          document.querySelector('input[aria-label*="url" i],input[aria-label*="source" i],input[aria-label*="link" i]') ||
-          findByLabel('url') || findByLabel('source url') || findByLabel('link');
-
-        if (urlInput) {
-          urlInput.focus();
-          setNativeValue(urlInput, SOURCE_URL);
-          await delay(300);
-
-          var dialog =
-            urlInput.closest('[role="dialog"],[role="alertdialog"]') ||
-            urlInput.closest('[class*="modal" i],[class*="popup" i],[class*="popover" i],[class*="bubble" i],[class*="overlay" i]') ||
-            urlInput.closest('form') ||
-            (urlInput.parentElement && urlInput.parentElement.parentElement);
-
-          var saveBtn = dialog
-            ? Array.from(dialog.querySelectorAll('button')).find(function(b) {
-                return /save|confirm|done|ok|apply|submit|update/i.test((b.textContent || '').trim());
-              })
-            : null;
-
-          if (saveBtn) {
-            saveBtn.click();
-            await delay(400);
-          } else {
-            urlInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-            urlInput.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', keyCode: 13, bubbles: true }));
-            await delay(300);
-            document.body.click();
-            await delay(200);
-          }
+        var doneBtn = Array.from(document.querySelectorAll('button')).find(function(b) {
+          return /done|save|ok/i.test(b.textContent.trim());
+        });
+        if (doneBtn) {
+          doneBtn.click();
+          await delay(400);
           filled.push('Original Source URL');
           sourceHandled = true;
         } else {
-          manual.push('Original Source URL - URL input not found after clicking option');
+          manual.push('Original Source URL - Done button not found, paste manually: ' + SOURCE_URL);
         }
       } else {
-        var directInput = findByLabel('source') || findByLabel('original') || findByLabel('credit') || document.querySelector('input[type="url"]');
-        if (directInput) {
-          directInput.focus();
-          setNativeValue(directInput, SOURCE_URL);
-          directInput.blur();
-          filled.push('Original Source URL (direct)');
-          sourceHandled = true;
-        } else {
-          manual.push('Original Source URL - could not find dialog option or direct input');
-        }
+        manual.push('Original Source URL - URL input not found (id="text-input"), paste manually: ' + SOURCE_URL);
       }
     } else {
-      manual.push('Original Source URL - edit button not found');
+      manual.push('Original Source URL - "Someone else" radio not found (id="yes_1"), paste manually: ' + SOURCE_URL);
     }
-  }
-
-  if (!sourceHandled && filled.indexOf('Original Source URL') === -1 && filled.indexOf('Original Source URL (direct)') === -1) {
-    manual.push('Original Source URL - paste manually: ' + SOURCE_URL);
+  } else if (SOURCE_URL) {
+    manual.push('Original Source URL - edit button not found (id="edit-original_source"), paste manually: ' + SOURCE_URL);
   }
   await delay(300);
 
-  // 5. Tags
+  // --- 5. Tags ---
   if (TAGS.length > 0) {
-    var tagsInput =
-      document.querySelector('input[placeholder*="tag" i]') ||
-      document.querySelector('input[aria-label*="tag" i]') ||
-      document.querySelector('[class*="tag" i] input') ||
-      document.querySelector('[data-testid*="tag" i] input') ||
-      findByLabel('tag') || findByLabel('tags');
-
-    if (tagsInput) {
-      for (var t = 0; t < TAGS.length; t++) {
-        tagsInput.focus();
-        setNativeValue(tagsInput, TAGS[t]);
-        await delay(180);
-        tagsInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-        tagsInput.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', keyCode: 13, bubbles: true }));
-        await delay(280);
-        if (tagsInput.value.trim() !== '') {
-          tagsInput.dispatchEvent(new KeyboardEvent('keydown', { key: ',', keyCode: 188, bubbles: true }));
-          await delay(150);
-          if (tagsInput.value.trim() !== '') setNativeValue(tagsInput, '');
-        }
+    // Find the edit button next to the TAGS label
+    var tagsEditBtn = null;
+    var allEls = Array.from(document.querySelectorAll('*'));
+    for (var i = 0; i < allEls.length; i++) {
+      if (allEls[i].children.length === 0 && allEls[i].textContent.trim() === 'TAGS') {
+        var parent = allEls[i].parentElement;
+        var btns = parent ? Array.from(parent.querySelectorAll('button,[role="button"]')) : [];
+        if (btns.length > 0) { tagsEditBtn = btns[0]; break; }
       }
-      filled.push('Tags (' + TAGS.length + '): ' + TAGS.join(', '));
+    }
+
+    if (tagsEditBtn) {
+      tagsEditBtn.click();
+      await delay(500);
+
+      var tagsInput = document.getElementById('tags');
+      if (tagsInput) {
+        for (var t = 0; t < TAGS.length; t++) {
+          tagsInput.focus();
+          setNativeValue(tagsInput, TAGS[t]);
+          await delay(180);
+          tagsInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+          tagsInput.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', keyCode: 13, bubbles: true }));
+          await delay(280);
+          if (tagsInput.value.trim() !== '') {
+            tagsInput.dispatchEvent(new KeyboardEvent('keydown', { key: ',', keyCode: 188, bubbles: true }));
+            await delay(150);
+            if (tagsInput.value.trim() !== '') setNativeValue(tagsInput, '');
+          }
+        }
+
+        var doneBtn2 = Array.from(document.querySelectorAll('button')).find(function(b) {
+          return /done|save|ok/i.test(b.textContent.trim());
+        });
+        if (doneBtn2) {
+          doneBtn2.click();
+          await delay(400);
+          filled.push('Tags (' + TAGS.length + '): ' + TAGS.join(', '));
+        } else {
+          filled.push('Tags entered but Done button not found - may need manual confirm');
+        }
+      } else {
+        manual.push('Tags - input not found (id="tags"), add manually: ' + TAGS.join(', '));
+      }
     } else {
-      manual.push('Tags - paste manually: ' + TAGS.join(', '));
+      manual.push('Tags - edit button not found next to TAGS label, add manually: ' + TAGS.join(', '));
     }
   }
 
   // --- Summary ---
-  var bar = '====================================================';
+  var bar = '==================================================';
   console.log('%c' + bar, 'color:#555');
   console.log('%c[OK] Toybox Autofill Complete', 'color:#22c55e;font-size:14px;font-weight:bold;');
   if (filled.length) {
@@ -425,7 +361,7 @@
     if (!url) { showAlert('Please enter a MakerWorld URL.', 'error'); return; }
 
     fetchBtn.disabled = true;
-    showAlert('Fetching metadata from MakerWorld…', 'loading');
+    showAlert('Fetching metadata from MakerWorld...', 'loading');
     metaPreview.style.display = 'none';
     outputSec.style.display   = 'none';
 
@@ -438,14 +374,14 @@
         return;
       }
 
-      document.getElementById('pTitle').textContent   = data.title       || '—';
-      document.getElementById('pCreator').textContent = data.creator     || '—';
-      document.getElementById('pDesc').textContent    = data.description || '—';
-      document.getElementById('pLicense').textContent = data.license     || '—';
+      document.getElementById('pTitle').textContent   = data.title       || '-';
+      document.getElementById('pCreator').textContent = data.creator     || '-';
+      document.getElementById('pDesc').textContent    = data.description || '-';
+      document.getElementById('pLicense').textContent = data.license     || '-';
       document.getElementById('pTags').innerHTML =
         (data.tags || []).map(function(t) {
           return '<span class="tag-chip">' + escHtml(t) + '</span>';
-        }).join('') || '—';
+        }).join('') || '-';
 
       metaPreview.style.display = 'block';
       scriptOut.value           = generateScript(data);
@@ -470,7 +406,7 @@
       document.execCommand('copy');
     }
     var orig = copyBtn.textContent;
-    copyBtn.textContent = '✓ Copied!';
+    copyBtn.textContent = 'Copied!';
     copyBtn.classList.add('copied');
     setTimeout(function() {
       copyBtn.textContent = orig;
