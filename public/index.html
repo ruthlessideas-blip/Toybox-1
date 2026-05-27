@@ -251,9 +251,11 @@
         setNativeValue(urlInput, SOURCE_URL);
         await delay(300);
 
-        var doneBtn = Array.from(document.querySelectorAll('button')).find(function(b) {
-          return /done|save|ok/i.test(b.textContent.trim());
-        });
+        var doneBtn = document.getElementById('confirm-btn') ||
+          document.querySelector('[data-testid="confirm-btn"]') ||
+          Array.from(document.querySelectorAll('button')).find(function(b) {
+            return /done|save|ok/i.test(b.textContent.trim());
+          });
         if (doneBtn) {
           doneBtn.click();
           await delay(400);
@@ -297,9 +299,11 @@
         setNativeValue(tagsInput, TAGS.join(', '));
         await delay(300);
 
-        var doneBtn2 = Array.from(document.querySelectorAll('button')).find(function(b) {
-          return /done|save|ok/i.test(b.textContent.trim());
-        });
+        var doneBtn2 = document.getElementById('confirm-btn') ||
+          document.querySelector('[data-testid="confirm-btn"]') ||
+          Array.from(document.querySelectorAll('button')).find(function(b) {
+            return /done|save|ok/i.test(b.textContent.trim());
+          });
         if (doneBtn2) {
           doneBtn2.click();
           await delay(400);
